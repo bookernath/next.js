@@ -331,7 +331,7 @@ Specifies a placeholder to use while the image is loading, improving the perceiv
 
 #### `blurDataURL`
 
-A [Data URL](https://developer.mozilla.org/docs/Web/HTTP/Basics_of_HTTP/Data_URIs) to
+A [Data URL](https://developer.mozilla.org/docs/Web/HTTP/Basics_of_HTTP/Data_URIs) or external URL to
 be used as a placeholder image before the image successfully loads. Can be automatically set or used with the [`placeholder="blur"`](#placeholder) property.
 
 ```jsx
@@ -346,10 +346,15 @@ If `src` is a static import of a `jpg`, `png`, `webp`, or `avif` file, `blurData
 
 **Manually set**
 
-If the image is dynamic or remote, you must provide `blurDataURL` yourself. To generate one, you can use:
+If the image is dynamic or remote, you must provide `blurDataURL` yourself. You can use:
 
-- [A online tool like png-pixel.com](https://png-pixel.com)
-- [A library like Plaiceholder](https://github.com/joe-bell/plaiceholder)
+- **Data URLs**: Inline base64-encoded images (recommended for best performance)
+  - [A online tool like png-pixel.com](https://png-pixel.com)
+  - [A library like Plaiceholder](https://github.com/joe-bell/plaiceholder)
+- **External URLs**: Direct URLs to small placeholder images (e.g., `https://cdn.example.com/blur.jpg`)
+  - Use small images (10px or less) from a fast CDN
+  - Note: External URLs require an additional network request and must respect CORS policies
+  - Consider potential performance impact compared to Data URLs
 
 A large blurDataURL may hurt performance. Keep it small and simple.
 
