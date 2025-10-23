@@ -26,6 +26,15 @@ export default function Page() {
         placeholder="blur"
         blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mO0/8/wBwAE/wI85bEJ6gAAAABJRU5ErkJggg=="
       />
+
+      <Image
+        id="blurry-placeholder-external-url"
+        src="/test.svg"
+        width="400"
+        height="400"
+        placeholder="blur"
+        blurDataURL="https://via.placeholder.com/10"
+      />
     </div>
   )
 }

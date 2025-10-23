@@ -230,12 +230,13 @@ When `eager`, load the image immediately.
 
 ### blurDataURL
 
-A [Data URL](https://developer.mozilla.org/docs/Web/HTTP/Basics_of_HTTP/Data_URIs) to
+A [Data URL](https://developer.mozilla.org/docs/Web/HTTP/Basics_of_HTTP/Data_URIs) or external URL to
 be used as a placeholder image before the `src` image successfully loads. Only takes effect when combined
 with [`placeholder="blur"`](#placeholder).
 
-Must be a base64-encoded image. It will be enlarged and blurred, so a very small image (10px or
-less) is recommended. Including larger images as placeholders may harm your application performance.
+Can be a base64-encoded Data URL or an external URL (e.g., `https://cdn.example.com/blur.jpg`). The image will be enlarged and blurred, so a very small image (10px or less) is recommended. Including larger images as placeholders may harm your application performance.
+
+**Note**: External URLs require an additional network request and must respect CORS policies. Data URLs are recommended for best performance.
 
 Try it out:
 

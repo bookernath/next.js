@@ -844,7 +844,7 @@ export default function Image({
           throw new Error(
             `Image with src "${src}" has "placeholder='blur'" property but is missing the "blurDataURL" property.
           Possible solutions:
-            - Add a "blurDataURL" property, the contents should be a small Data URL to represent the image
+            - Add a "blurDataURL" property, the contents should be a small Data URL or external URL to represent the image
             - Change the "src" property to a static import with one of the supported file types: ${VALID_BLUR_EXT.join(
               ','
             )} (animated images not supported)

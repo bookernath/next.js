@@ -556,7 +556,7 @@ export function getImgProps(
       throw new Error(
         `Image with src "${src}" has "placeholder='blur'" property but is missing the "blurDataURL" property.
         Possible solutions:
-          - Add a "blurDataURL" property, the contents should be a small Data URL to represent the image
+          - Add a "blurDataURL" property, the contents should be a small Data URL or external URL to represent the image
           - Change the "src" property to a static import with one of the supported file types: ${VALID_BLUR_EXT.join(
             ','
           )} (animated images not supported)
@@ -664,17 +664,22 @@ export function getImgProps(
     style
   )
 
+  const isExternalBlurUrl =
+    blurDataURL?.startsWith('http://') || blurDataURL?.startsWith('https://')
+
   const backgroundImage =
     !blurComplete && placeholder !== 'empty'
       ? placeholder === 'blur'
-        ? `url("data:image/svg+xml;charset=utf-8,${getImageBlurSvg({
-            widthInt,
-            heightInt,
-            blurWidth,
-            blurHeight,
-            blurDataURL: blurDataURL || '', // assume not undefined
-            objectFit: imgStyle.objectFit,
-          })}")`
+        ? isExternalBlurUrl
+          ? `url("${blurDataURL}")` // Use external URL directly
+          : `url("data:image/svg+xml;charset=utf-8,${getImageBlurSvg({
+              widthInt,
+              heightInt,
+              blurWidth,
+              blurHeight,
+              blurDataURL: blurDataURL || '', // assume not undefined
+              objectFit: imgStyle.objectFit,
+            })}")`
         : `url("${placeholder}")` // assume `data:image/`
       : null
 
@@ -699,11 +704,12 @@ export function getImgProps(
     if (
       placeholderStyle.backgroundImage &&
       placeholder === 'blur' &&
-      blurDataURL?.startsWith('/')
+      (blurDataURL?.startsWith('/') || isExternalBlurUrl)
     ) {
       // During `next dev`, we don't want to generate blur placeholders with webpack
       // because it can delay starting the dev server. Instead, `next-image-loader.js`
       // will inline a special url to lazily generate the blur placeholder at request time.
+      // External URLs are also used directly without additional processing.
       placeholderStyle.backgroundImage = `url("${blurDataURL}")`
     }
   }
