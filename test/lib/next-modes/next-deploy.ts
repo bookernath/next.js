@@ -186,7 +186,7 @@ export class NextDeployInstance extends NextInstance {
     require('console').log(`Got buildId: ${this._buildId}`)
 
     // Use the vercel inspect command to get the CLI output from the build.
-    const { stderr: buildLogsStdout, stdout: buildLogsStderr } =
+    const { stdout: buildLogsStdout, stderr: buildLogsStderr } =
       await execaWithRetry(
         'vercel',
         ['inspect', '--logs', this._url, ...vercelFlags],
