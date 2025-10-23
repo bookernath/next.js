@@ -71,21 +71,14 @@ export class NextDeployInstance extends NextInstance {
     require('console').log(`Linking project at ${this.testDir}`)
 
     // link the project
-    const linkRes = await execa(
+    await execaWithRetry(
       'vercel',
       ['link', '-p', TEST_PROJECT_NAME, '--yes', ...vercelFlags],
       {
         cwd: this.testDir,
         env: vercelEnv,
-        reject: false,
       }
     )
-
-    if (linkRes.exitCode !== 0) {
-      throw new Error(
-        `Failed to link project ${linkRes.stdout} ${linkRes.stderr} (${linkRes.exitCode})`
-      )
-    }
     require('console').log(`Deploying project at ${this.testDir}`)
 
     const additionalEnv: string[] = []
@@ -113,7 +106,7 @@ export class NextDeployInstance extends NextInstance {
       additionalEnv.push(`IS_WEBPACK_TEST=1`)
     }
 
-    const deployRes = await execa(
+    const { stdout: deployStdout } = await execaWithRetry(
       'vercel',
       [
         'deploy',
@@ -135,7 +128,6 @@ export class NextDeployInstance extends NextInstance {
       {
         cwd: this.testDir,
         env: vercelEnv,
-        reject: false,
         // This will print deployment information earlier to the console so we
         // don't have to wait until the deployment is complete to get the
         // inspect URL.
@@ -143,14 +135,8 @@ export class NextDeployInstance extends NextInstance {
       }
     )
 
-    if (deployRes.exitCode !== 0) {
-      throw new Error(
-        `Failed to deploy project ${deployRes.stdout} ${deployRes.stderr} (${deployRes.exitCode})`
-      )
-    }
-
     // the CLI gives just the deployment URL back when not a TTY
-    this._url = deployRes.stdout
+    this._url = deployStdout
     this._parsedUrl = new URL(this._url)
 
     // If configured, we should configure the `/etc/hosts` file to point the
@@ -200,24 +186,21 @@ export class NextDeployInstance extends NextInstance {
     require('console').log(`Got buildId: ${this._buildId}`)
 
     // Use the vercel inspect command to get the CLI output from the build.
-    const buildLogs = await execa(
-      'vercel',
-      ['inspect', '--logs', this._url, ...vercelFlags],
-      {
-        env: vercelEnv,
-        reject: false,
-      }
-    )
-    if (buildLogs.exitCode !== 0) {
-      throw new Error(`Failed to get build output logs: ${buildLogs.stderr}`)
-    }
+    const { stderr: buildLogsStdout, stdout: buildLogsStderr } =
+      await execaWithRetry(
+        'vercel',
+        ['inspect', '--logs', this._url, ...vercelFlags],
+        {
+          env: vercelEnv,
+        }
+      )
 
     // Use the stdout from the logs command as the CLI output. The CLI will
     // output other unrelated logs to stderr.
 
     // TODO: Combine with runtime logs (via `vercel logs`)
     // Build logs seem to be piped to stderr, so we'll combine them to make sure we get all the logs.
-    this._cliOutput = buildLogs.stdout + buildLogs.stderr
+    this._cliOutput = buildLogsStdout + buildLogsStderr
   }
 
   public async destroy() {
@@ -274,5 +257,112 @@ export class NextDeployInstance extends NextInstance {
     newFilename: string
   ): Promise<void> {
     throw new Error('renameFile is not available in deploy test mode')
+  }
+}
+
+/**
+ * Retry configuration for Vercel CLI commands
+ */
+interface RetryConfig {
+  maxRetries: number
+  initialDelayMs: number
+  maxDelayMs: number
+  backoffMultiplier: number
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 5,
+  initialDelayMs: 100,
+  maxDelayMs: 10000,
+  backoffMultiplier: 2,
+}
+
+/**
+ * Sleep helper for async/await
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Checks if an error message indicates a rate limit error from Vercel CLI
+ */
+function isRateLimitError(stderr: string, stdout: string): boolean {
+  const combined = `${stderr} ${stdout}`.toLowerCase()
+  return (
+    combined.includes('too many requests') ||
+    combined.includes('rate limit') ||
+    combined.includes('try again in')
+  )
+}
+
+/**
+ * Executes a Vercel CLI command with exponential backoff retry logic
+ *
+ * This helper is specifically designed to handle rate limiting errors that occur
+ * when running tests concurrently in CI environments. It implements exponential
+ * backoff with jitter to reduce thundering herd problems.
+ *
+ * @param command The command to execute (e.g., 'vercel')
+ * @param args Command arguments
+ * @param options execa options
+ * @param retryConfig Optional retry configuration
+ * @returns A tuple of [stdout, stderr] on success
+ * @throws Error if the command fails after all retries
+ */
+async function execaWithRetry(
+  command: string,
+  args: string[],
+  options: execa.Options,
+  retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG
+): Promise<{ stdout: string; stderr: string }> {
+  let attempt = 0
+  const commandStr = `${command} ${args.join(' ')}`
+
+  while (true) {
+    const result = await execa(command, args, {
+      ...options,
+      reject: false,
+    })
+
+    // If the command succeeded, return stdout and stderr
+    if (result.exitCode === 0) {
+      if (attempt > 0) {
+        require('console').log(
+          `✓ Command succeeded after ${attempt} ${attempt === 1 ? 'retry' : 'retries'}`
+        )
+      }
+      return { stdout: result.stdout, stderr: result.stderr }
+    }
+
+    // Check if this is a rate limit error that we should retry
+    if (
+      isRateLimitError(result.stderr, result.stdout) &&
+      attempt < retryConfig.maxRetries
+    ) {
+      // Calculate delay with exponential backoff and jitter
+      const baseDelay = Math.min(
+        retryConfig.initialDelayMs *
+          Math.pow(retryConfig.backoffMultiplier, attempt),
+        retryConfig.maxDelayMs
+      )
+      // Add jitter (±<=20%) to prevent a thundering herd
+      const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1)
+      const delayMs = Math.round(baseDelay + jitter)
+
+      require('console').log(
+        `⚠ Rate limit error detected (attempt ${attempt + 1}/${retryConfig.maxRetries + 1}). Retrying in ${delayMs}ms...`
+      )
+      require('console').log(`   Error: ${result.stderr.trim()}`)
+
+      await sleep(delayMs)
+      attempt++
+      continue
+    }
+
+    // If it's not a rate limit error, or we've exhausted retries, throw immediately
+    throw new Error(
+      `Command "${commandStr}" failed with exit code: ${result.exitCode}. ${result.stdout} ${result.stderr}`
+    )
   }
 }
