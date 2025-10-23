@@ -73,8 +73,6 @@ jobs:
     secrets: inherit
     strategy:
       fail-fast: false
-      # Limit to 4 at a time to avoid rate limits from vercel
-      max-parallel: 4
       matrix:
         group: [1/8, 2/8, 3/8, 4/8, 5/8, 6/8, 7/8, 8/8]
     with:
@@ -101,8 +99,6 @@ jobs:
     secrets: inherit
     strategy:
       fail-fast: false
-      # Limit to 4 at a time to avoid rate limits from vercel
-      max-parallel: 4
       matrix:
         group: [1/8, 2/8, 3/8, 4/8, 5/8, 6/8, 7/8, 8/8]
     with:
